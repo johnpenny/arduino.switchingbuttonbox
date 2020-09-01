@@ -1,5 +1,5 @@
 # Arduino USB Switching Button Box
-A simple media/game switchable USB button box. Using a Sparkfun Pro Micro.
+A simple media/game USB switching button box. The same buttons are used, but the mode is switchable, allowing double functionality. Using a Sparkfun Pro Micro.
 
 ### State
 Nebulous. Basic functionality is there.
