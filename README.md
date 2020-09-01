@@ -1,4 +1,4 @@
-# Arduino Switching USB Button Box
+# Arduino USB Switching Button Box
 A simple media/game switchable USB button box. Using a Sparkfun Pro Micro.
 
 ### State
@@ -20,9 +20,9 @@ This is a new button box concept (for me) with a mode switcher that allows multi
 * Grab usbbuttonbox.ino from this repo
 
 ##### Hardware
-* Wire up two LEDS, one to pin 10, and one to 16
-* Wire some momentary buttons up to pins 9,8,7,6,5,4 and GND (ground)
-* Wire up a momentary button to pin 3 and GND
+* Wire two LEDS to pins 10 and 16 (using some appropriate resistors if required), to GND (ground)
+* Wire some momentary buttons to pins 9,8,7,6,5,4, to GND
+* Wire a separate (mode switcher) momentary button to pin 3, to GND
 
 ##### Customise
 The project is set up so that the media keys are timed out (holding causes input interval, must press and release for fast input) buttons for: 4 (prev), 5 (next), 6 (pause/play), 7 (mute), 8 (vol down), 9 (vol up); and in GAME mode all buttons are virtual on/off switches (I'm using it mainly for flight sim) and you can demo functionality via the "USB game controllers" utility in Windows. You may set all the pin numbers and media functions to ones relevant to your setup.
