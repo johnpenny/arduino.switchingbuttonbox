@@ -25,7 +25,7 @@ This is a new button box concept (for me) with a mode switcher that allows multi
 ##### Software
 * Grab the Joystick Library within arduino IDE or - https://github.com/MHeironimus/ArduinoJoystickLibrary
 * Grab the HID-Project within arduino IDE or - https://github.com/NicoHood/HID
-* Grab usbbuttonbox.ino from this repo
+* Grab the .ino file from this repo
 
 ##### Hardware
 * Wire two LEDS to pins 10 and 16 (using some appropriate resistors if required), to GND (ground)
