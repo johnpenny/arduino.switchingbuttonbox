@@ -2,13 +2,11 @@
 //░ Author: John Penny © 2020; All rights reserved
 //░ License: Dictated by project root license
 //░ Contact: JohnPenny+work@gmail.com
-//░ Notes: Excuse any ridiculous code, I have not done much C++.
+//░ Notes: 
 
 #include <Joystick.h> // Joystick Library -- https://github.com/MHeironimus/ArduinoJoystickLibrary
 #include <HID-Project.h> // HID-Project -- https://github.com/NicoHood/HID
 #include <HID-Settings.h>
-
-// CRIT cant use pins 0 or 1 without chaos, look into it and maybe remove them from the pin max
 
 namespace JohnPenny
 {
@@ -49,8 +47,9 @@ namespace JohnPenny
 				uint8_t id; // a unique ID for error handling (currently just the array index, ie the number at which the pin was set up)
 				bool active; // a status bool as we cannot use non assignment safely for status
 				bool held; // was this control being held on in the last loop? (NOTE: new explicit hold field rather than using timestamp 0)
-				uint16_t timestamp; // a timestamp to rate limit button handling -- ie when a button is held re-send input every N ms
-				uint16_t inputInterval; // the interval at which some inputs will repeat when the control is held (in ms)
+				uint16_t timestamp; // a timestamp to rate limit button handling via the interval && mitigate input bounce -- ie when a button is held re-send input every N ms and when an input is pressed there must be N ms before another of the same can register
+				uint16_t inputIntervalMillis; // the interval at which some inputs will repeat when the control is held (in ms)
+				uint16_t bounceMitigationMillis; // the time in ms after which to allow the control to be used again
 				PinType pinType; // the pin read method we are going to use
 				ControlType controlType; // the type of physical control
 				uint8_t joystickKeycode; // the keycode to use while in the joystick (game pad) mode
@@ -63,8 +62,9 @@ namespace JohnPenny
 					this->id = 0u;
 					this->active = false;
 					this->held = false;
-					this->timestamp = 0u;
-					this->inputInterval = 1000u;
+					this->timestamp = 99999u;
+					this->inputIntervalMillis = 1000u;
+					this->bounceMitigationMillis = 30u;
 					this->pinType = PinType::UNSET;
 					this->controlType = ControlType::UNSET;
 					this->joystickKeycode = 0u;
@@ -83,6 +83,7 @@ namespace JohnPenny
 					controls = new Control[pinCount]{};
 				}
 
+				bool bounceMitigation = true; // try to mitigate input bounce which is a common issue with basic momentary buttons (the input goes on off on, not clean)
 				bool debug = false; // !IMPORTANT this will HALT until you open a serial connection, you must understand that this will break the plug and play function of the board!
 				bool isGameMode; // cache the mode state (more complex mode select is unrequired right now) allows quick bool invert
 				uint8_t modePin = 255; // pin to use for mode
@@ -196,7 +197,7 @@ namespace JohnPenny
 
 				/////////
 
-				void PinSetup(uint8_t pin, ControlType controlType = ControlType::UNSET, uint8_t joystickKeycode = 0u, ConsumerKeycode consumerKeycode = (ConsumerKeycode)0u, uint16_t inputInterval = 1000u)
+				void PinSetup(uint8_t pin, ControlType controlType = ControlType::UNSET, uint8_t joystickKeycode = 0u, ConsumerKeycode consumerKeycode = (ConsumerKeycode)0u, uint16_t inputIntervalMillis = 1000u, uint16_t bounceMitigationMillis = 30u)
 				{
 					// infer pintype from control type -- defaulting to digital
 					switch (controlType)
@@ -229,7 +230,8 @@ namespace JohnPenny
 					controls[activeControlCount].controlType = controlType;
 					controls[activeControlCount].joystickKeycode = joystickKeycode;
 					controls[activeControlCount].consumerKeycode = consumerKeycode;
-					controls[activeControlCount].inputInterval = inputInterval;
+					controls[activeControlCount].inputIntervalMillis = inputIntervalMillis;
+					controls[activeControlCount].bounceMitigationMillis = bounceMitigationMillis;
 					activeControlCount++;
 				}
 
@@ -266,11 +268,22 @@ namespace JohnPenny
 					{
 						if (digitalRead(control.pin) == LOW)
 						{
+							// bounce mitigation
+							if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
+							
+							// still held - do nothing
 							if (control.held == true) return;
+
+							// timestamp this event
+							control.timestamp = time;
+
+							// state
 							control.held = true;
 
-							isGameMode = !isGameMode; // switch modes
+							// switch modes
+							isGameMode = !isGameMode;
 
+							// feedback
 							if (isGameMode)
 							{
 								digitalWrite(feedbackGameMode, HIGH);
@@ -292,6 +305,13 @@ namespace JohnPenny
 						}
 						else
 						{
+							// bounce mitigation
+							if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
+
+							// timestamp this event
+							control.timestamp = time;
+
+							// state
 							control.held = false;
 						}
 
@@ -323,13 +343,18 @@ namespace JohnPenny
 							{
 								switch (state)
 								{
-								case LOW: // LOW pulled down (pressed) (active) (on) (LOW)
+								case LOW: // LOW pulled down (ON) (pressed)
 								{
-									// handle flow (CHOOSE between a hold limit OR a time limit)
-									//if (control.held == true) return; // HOLD LIMIT - entered here still held - for game buttons return if held down
-									if (time - control.timestamp < control.inputInterval) return; // TIME LIMIT - too soon
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
 
-									// sync timeout
+									// OPTION: still held - do nothing
+									//if (control.held == true) return;
+
+									// OPTION: still held - wait until the interval has elapsed before allowing another input
+									if (control.held == true && time - control.timestamp < control.inputIntervalMillis) return;
+
+									// timestamp this event
 									control.timestamp = time;
 
 									// state
@@ -344,13 +369,16 @@ namespace JohnPenny
 									// finish
 									break;
 								}
-								case HIGH: // HIGH pulled up (default) (idle)
+								case HIGH: // HIGH pulled up (OFF) (unpressed)
 								{
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
+
 									// state
 									control.held = false;
 
-									// reset timeout
-									control.timestamp = 0u;
+									// timestamp this event
+									control.timestamp = time;
 
 									// feedback (LED)
 									digitalWrite(ledInput, LOW);
@@ -400,13 +428,18 @@ namespace JohnPenny
 							{
 								switch (state)
 								{
-								case LOW: // LOW pulled down (pressed) (active) (on) (LOW)
+								case LOW: // LOW pulled down (ON) (pressed)
 								{
-									// handle flow (CHOOSE between a hold limit OR a time limit)
-									if (control.held == true) return; // HOLD LIMIT - entered here still held - for game buttons return if held down
-									//if (time - control.timestamp < control.inputInterval) return; // TIME LIMIT - too soon
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
 
-									// sync timeout
+									// OPTION: still held - do nothing
+									if (control.held == true) return;
+
+									// OPTION: still held - wait until the interval has elapsed before allowing another input
+									//if (control.held == true && time - control.timestamp < control.inputIntervalMillis) return;
+
+									// timestamp this event
 									control.timestamp = time;
 
 									// state
@@ -421,13 +454,16 @@ namespace JohnPenny
 									// finish
 									break;
 								}
-								case HIGH: // HIGH pulled up (default) (idle)
+								case HIGH: // HIGH pulled up (OFF) (unpressed)
 								{
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
+
 									// state
 									control.held = false;
 
-									// reset timeout
-									control.timestamp = 0u;
+									// timestamp this event
+									control.timestamp = time;
 
 									// feedback (LED)
 									digitalWrite(ledInput, LOW);
@@ -446,13 +482,18 @@ namespace JohnPenny
 							{
 								switch (state)
 								{
-								case LOW: // LOW pulled down (pressed) (active) (on) (LOW)
+								case LOW: // LOW pulled down (ON) (pressed)
 								{
-									// handle flow (choose between a hold limit or a time limit)
-									if (control.held == true) return; // entered here still held - for game buttons return if held down
-									//if (time - control.timestamp < control.inputInterval) return; // too soon
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
 
-									// sync timeout
+									// OPTION: still held - do nothing
+									if (control.held == true) return;
+
+									// OPTION: still held - wait until the interval has elapsed before allowing another input
+									//if (control.held == true && time - control.timestamp < control.inputIntervalMillis) return;
+
+									// timestamp this event
 									control.timestamp = time;
 
 									// state
@@ -468,13 +509,16 @@ namespace JohnPenny
 									// finish
 									break;
 								}
-								case HIGH: // HIGH pulled up (default) (idle)
+								case HIGH: // HIGH pulled up (OFF) (unpressed)
 								{
+									// bounce mitigation
+									if (bounceMitigation && time - control.timestamp < control.bounceMitigationMillis) return;
+
 									// state
 									control.held = false;
 
-									// reset timeout
-									control.timestamp = 0u;
+									// timestamp this event
+									control.timestamp = time;
 
 									// feedback (LED)
 									digitalWrite(ledInput, LOW);
