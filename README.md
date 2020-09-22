@@ -12,10 +12,10 @@ Nebulous. Basic functionality is there. Missing input matrix, so pin to control 
 * Pot support for gradual controls
 * Joystick support
 
-### Why?
+### Why Did You Make It?
 This is a new button box concept (for me) with a mode switcher that allows multiplying the inputs via a mode switch (or in future a dial with more than 2 modes). The reason I am creating this specific box is so that I can use a single smaller box for basic gaming functions (MSFS2020) and media keys for my music. All my previous button boxes were exiled from my desk, so I am simply trying to make a better solution that is useful enough to stay on my desk all the time.
 
-### How?
+### How Do I Use It?
 ##### Prerequisites
 * A Sparkfun Pro Micro (or similar USB plug and play board) with a USB cable
 * Some momentary buttons at minimum
